@@ -105,28 +105,57 @@ def output_spatial_size(input_size, kernel, stride, padding):
     return ((input_size + 2 * padding - kernel) // stride) + 1
 
 # Step 15 - im2col
+# def im2col(images, kernel_h, kernel_w, stride, padding):
+#     # TODO: Unroll overlapping patches of a 4D image tensor into a 2D column matrix.
+#     (N, C, H, W) = images.shape
+#     out_h = output_spatial_size(H, kernel_h, stride, padding)
+#     out_w = output_spatial_size(W, kernel_w, stride, padding)
+#     kernel_h_radius = kernel_h // 2
+#     kernel_w_radius = kernel_w // 2
+
+#     images_padded = pad_2d(images, padding)
+#     (N, C, H, W) = images_padded.shape
+
+#     images_unrolled = np.zeros((N * out_h * out_w, C * kernel_h * kernel_w), dtype=images.dtype)
+
+#     patch_index = 0
+#     for image_index in range(N):
+#         for row in range(kernel_h_radius, H - kernel_h_radius + 1, stride):
+#             for column in range(kernel_w_radius, W - kernel_w_radius + 1, stride):
+#                 patch = images_padded[image_index, :, row - kernel_h_radius:row + kernel_h_radius, column - kernel_w_radius:column + kernel_w_radius]
+#                 images_unrolled[patch_index, :] = patch.flatten()
+#                 patch_index += 1
+
+#     return images_unrolled
+
+
 def im2col(images, kernel_h, kernel_w, stride, padding):
-    # TODO: Unroll overlapping patches of a 4D image tensor into a 2D column matrix.
-    (N, C, H, W) = images.shape
+    N, C, H, W = images.shape
+    
     out_h = output_spatial_size(H, kernel_h, stride, padding)
     out_w = output_spatial_size(W, kernel_w, stride, padding)
-    kernel_h_radius = kernel_h // 2
-    kernel_w_radius = kernel_w // 2
 
     images_padded = pad_2d(images, padding)
-    (N, C, H, W) = images_padded.shape
 
-    images_unrolled = np.zeros((N * out_h * out_w, C * kernel_h * kernel_w), dtype=images.dtype)
+    # Generate row and column offset indices within the kernel window
+    i0 = np.repeat(np.arange(kernel_h), kernel_w)
+    i0 = np.tile(i0, C)
+    i1 = stride * np.repeat(np.arange(out_h), out_w)
+    
+    j0 = np.tile(np.arange(kernel_w), kernel_h * C)
+    j1 = stride * np.tile(np.arange(out_w), out_h)
 
-    patch_index = 0
-    for image_index in range(N):
-        for row in range(kernel_h_radius, H - kernel_h_radius + 1, stride):
-            for column in range(kernel_w_radius, W - kernel_w_radius + 1, stride):
-                patch = images_padded[image_index, :, row - kernel_h_radius:row + kernel_h_radius, column - kernel_w_radius:column + kernel_w_radius]
-                images_unrolled[patch_index, :] = patch.flatten()
-                patch_index += 1
+    # Broadcast indices across spatial locations
+    i = i0.reshape(-1, 1) + i1.reshape(1, -1)
+    j = j0.reshape(-1, 1) + j1.reshape(1, -1)
+    k = np.repeat(np.arange(C), kernel_h * kernel_w).reshape(-1, 1)
 
-    return images_unrolled
+    # Extract patches: shape (N, C * kh * kw, out_h * out_w)
+    cols = images_padded[:, k, i, j]
+    
+    # Transpose and reshape to (N * out_h * out_w, C * kh * kw)
+    cols = cols.transpose(0, 2, 1).reshape(N * out_h * out_w, -1)
+    return cols
 
 # Step 16 - col2im (not yet solved)
 # TODO: implement
