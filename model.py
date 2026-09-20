@@ -157,8 +157,34 @@ def im2col(images, kernel_h, kernel_w, stride, padding):
     cols = cols.transpose(0, 2, 1).reshape(N * out_h * out_w, -1)
     return cols
 
-# Step 16 - col2im (not yet solved)
-# TODO: implement
+# Step 16 - col2im
+def col2im(cols, input_shape, kernel_h, kernel_w, stride, padding):
+    # TODO: re-roll a (N*out_h*out_w, C*kh*kw) column matrix back into a (N, C, H, W) tensor
+    N, C, H, W = input_shape
+    
+    out_h = output_spatial_size(H, kernel_h, stride, padding)
+    out_w = output_spatial_size(W, kernel_w, stride, padding)
+
+    # 1. Initialize padded spatial image buffer with zeros
+    H_padded = H + 2 * padding
+    W_padded = W + 2 * padding
+    images_padded = np.zeros((N, C, H_padded, W_padded), dtype=cols.dtype)
+
+    # 2. Reshape cols back into tensor representation matching im2col layout:
+    # (N, out_h, out_w, C, kernel_h, kernel_w)
+    cols_reshaped = cols.reshape(N, out_h, out_w, C, kernel_h, kernel_w)
+
+    # 3. Iterate over each relative offset (i, j) within the kernel
+    for i in range(kernel_h):
+        for j in range(kernel_w):
+            # Extract slice for kernel offset (i, j): shape (N, out_h, out_w, C) -> transpose to (N, C, out_h, out_w)
+            patch_ij = cols_reshaped[:, :, :, :, i, j].transpose(0, 3, 1, 2)
+            
+            # Accumulate into strided slice of padded image
+            images_padded[:, :, i : i + out_h * stride : stride, j : j + out_w * stride : stride] += patch_ij
+
+    # 4. Crop padding away to return original (N, C, H, W) shape
+    return images_padded[:, :, padding : padding + H, padding : padding + W]
 
 # Step 17 - conv2d_forward (not yet solved)
 # TODO: implement
