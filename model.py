@@ -210,21 +210,40 @@ def conv2d_forward(x, weights, bias, stride, padding):
         "kernel_w": kw,
     }
     
-    image_out = cols_out.reshape(N, c_out, h_out, w_out)
+    image_out = cols_out.reshape(N, h_out, w_out, c_out).transpose(0, 3, 1, 2)
     return image_out, result
 
 # Step 18 - conv2d_grad_input
 def conv2d_grad_input(d_out, cache):
-    # TODO: backprop d_out through the conv input using col2im
-
+    # Extract cache parameters
+    W = cache["weights"]                  # Shape: (C_out, C_in, kernel_h, kernel_w)
+    stride = cache["stride"]
+    padding = cache["padding"]
+    kernel_h = cache["kernel_h"]
+    kernel_w = cache["kernel_w"]
+    x_shape = cache["x_shape"]      # (N, C_in, H, W)
+    
+    N, C_out, out_h, out_w = d_out.shape
+    
+    # 1. Transpose and reshape d_out to (N * out_h * out_w, C_out)
+    d_out_reshaped = d_out.transpose(0, 2, 3, 1).reshape(-1, C_out)
+    
+    # 2. Reshape weights W to (C_out, C_in * kernel_h * kernel_w)
+    W_row = W.reshape(C_out, -1)
+    
+    # 3. Compute gradient with respect to columns (d_col) via matrix multiplication
+    # Shape: (N * out_h * out_w, C_out) @ (C_out, C_in * kernel_h * kernel_w) -> (N * out_h * out_w, C_in * kernel_h * kernel_w)
+    d_col = np.dot(d_out_reshaped, W_row)
+    
+    # 4. Fold the gradient columns back into the image layout (N, C_in, H, W) using col2im
     return col2im(
-        d_out, 
-        cache["x_shape"], 
-        cache["kernel_h"], 
-        cache["kernel_w"], 
-        cache["stride"], 
-        cache["padding"]
-        )
+        d_col, 
+        x_shape, 
+        kernel_h, 
+        kernel_w, 
+        stride, 
+        padding
+    )
 
 # Step 19 - conv2d_grad_weights (not yet solved)
 # TODO: implement
